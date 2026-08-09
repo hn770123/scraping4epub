@@ -112,5 +112,54 @@ class TestSyosetuScraper(unittest.TestCase):
         finally:
             self.scraper._get_request = original_get_request
 
+    def test_get_request_retry_on_network_failure(self):
+        """
+        ネットワークエラー（HTTPエラーなど）が発生した際に、
+        _get_requestが指定回数リトライを試み、最終的に例外を発生させることをテストします。
+        """
+        import requests
+
+        # 実際にリクエストが送信されないようにrequests.getをモック化してエラーを発生させる
+        original_get = requests.get
+        call_count = 0
+
+        def mock_get(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            # ネットワークエラーを再現する例外を発生させる
+            raise requests.RequestException("Simulated network failure")
+
+        requests.get = mock_get
+        # テスト時間を短縮するため、一時的にウェイト設定を0にする
+        self.scraper.delay = 0.0
+
+        try:
+            # 3回のリトライが失敗した後に例外が発生することを確認
+            with self.assertRaises(requests.RequestException):
+                # 存在しないダミーURLを指定
+                self.scraper._get_request("https://example.com/failed_url")
+
+            # 最大試行回数が3回であることを検証
+            self.assertEqual(call_count, 3)
+        finally:
+            requests.get = original_get
+
+    def test_parse_episode_without_target_classes(self):
+        """
+        本文を構成するなろう特有のCSSクラス（.js-novel-text、.p-novel__textなど）
+        が存在しない場合でも、空文字の本文を返すことでエラーを起こさず適切にハンドリングできるかテストします。
+        """
+        html_content = """
+        <html>
+          <body>
+            <div class="unknown-class">本文がありません</div>
+          </body>
+        </html>
+        """
+        parsed = self.scraper._parse_episode(html_content)
+        # サブタイトルと本文が空でもクラッシュしないことを確認
+        self.assertEqual(parsed["subtitle"], "")
+        self.assertEqual(parsed["body"], "")
+
 if __name__ == "__main__":
     unittest.main()

@@ -32,6 +32,8 @@ class EpubBuilder:
     def build_epub(self, meta_info, chapters):
         """
         メタ情報と各エピソードのXHTMLをもとにEPUBファイルを生成する。
+        カレントディレクトリに 「cover.png」 が存在する場合、自動的に表紙（cover.png、cover.xhtml）
+        を生成し、EPUBの表紙として設定します。
 
         Parameters:
             meta_info (dict): タイトル、作者、識別子、前書きなどのメタデータ
@@ -86,6 +88,69 @@ class EpubBuilder:
         chapter_files = {}
 
         play_order = 1
+
+        # 表紙（cover.png）の設定
+        has_cover = os.path.exists("cover.png")
+        cover_image_bytes = None
+        cover_xhtml = ""
+
+        # フォルダ（カレントディレクトリ）にcover.pngがある時、表紙に設定する
+        if has_cover:
+            # cover.png をバイナリとして読み込む
+            with open("cover.png", "rb") as f:
+                cover_image_bytes = f.read()
+
+            # EPUB 3 規格に則った表紙xhtmlの定義
+            cover_xhtml = """<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja" lang="ja">
+<head>
+    <meta charset="utf-8" />
+    <title>表紙</title>
+    <style type="text/css">
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+        }
+        body {
+            text-align: center;
+            background-color: #ffffff;
+        }
+        div.cover {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <img src="cover.png" alt="Cover" />
+    </div>
+</body>
+</html>"""
+
+            # マニフェストとスパインへの登録（表紙は最優先で先頭に配置）
+            manifest_items.append('<item id="cover-image" href="cover.png" media-type="image/png" properties="cover-image"/>')
+            manifest_items.append('<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>')
+            spine_items.append('<itemref idref="cover"/>')
+
+            # EPUB 2 互換用目次(toc.ncx)にも表紙を追加
+            ncx_items.append(f"""    <navPoint id="nav-cover" playOrder="{play_order}">
+      <navLabel><text>表紙</text></navLabel>
+      <content src="cover.xhtml"/>
+    </navPoint>""")
+            play_order += 1
+
         # nav.xhtml (目次) 自体のplayOrder（EPUB2互換用NCX用）
         play_order += 1
 
@@ -146,14 +211,14 @@ class EpubBuilder:
   </rootfiles>
 </container>"""
 
-        # OEBPS/style.css (縦書き用スタイルシート) の生成
+        # OEBPS/style.css (横書き用スタイルシート) の生成
         style_css = """@charset "utf-8";
 
-/* 日本語の縦書き表示設定 */
+/* 日本語の横書き表示設定 */
 html {
-    writing-mode: vertical-rl;
-    -webkit-writing-mode: vertical-rl;
-    -epub-writing-mode: vertical-rl;
+    writing-mode: horizontal-tb;
+    -webkit-writing-mode: horizontal-tb;
+    -epub-writing-mode: horizontal-tb;
 }
 
 body {
@@ -164,8 +229,8 @@ body {
 
 h1, h2, h3, h4, h5, h6 {
     font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "MS Gothic", sans-serif;
-    margin-left: 1.5em;
-    margin-right: 0.5em;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
 }
 
 p {
@@ -182,6 +247,10 @@ ruby rt {
         # 2. Kindleでエラー原因になりやすい「空のナビゲーション（Nav）」の出力を綺麗に整えるため、
         # spineに 'nav' を入れず、最後に add_item(epub.EpubNav()) もしないという修正の方向性に則り、
         # spine内の <itemref idref="nav"/> を削除します。
+
+        # EPUB 2互換用カバーメタデータタグ（cover.pngが存在する場合に付与）
+        cover_meta_tag = '<meta name="cover" content="cover-image"/>' if has_cover else ""
+
         content_opf = f"""<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="pub-id" version="3.0" xml:lang="ja">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -190,6 +259,7 @@ ruby rt {
     <dc:creator id="creator">{author}</dc:creator>
     <dc:language>ja</dc:language>
     <meta property="dcterms:modified">{modified_time}</meta>
+    {cover_meta_tag}
   </metadata>
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
@@ -211,7 +281,7 @@ ruby rt {
     <title>目次</title>
     <link rel="stylesheet" type="text/css" href="style.css" />
 </head>
-<body class="vertical-text">
+<body class="horizontal-text">
     <nav epub:type="toc" id="toc">
         <h1>目次</h1>
         <ol>
@@ -255,6 +325,11 @@ ruby rt {
             z.writestr("OEBPS/content.opf", content_opf, compress_type=zipfile.ZIP_DEFLATED)
             z.writestr("OEBPS/nav.xhtml", nav_xhtml, compress_type=zipfile.ZIP_DEFLATED)
             z.writestr("OEBPS/toc.ncx", toc_ncx, compress_type=zipfile.ZIP_DEFLATED)
+
+            # 表紙ファイルが存在する場合、ZIPアーカイブに書き込む
+            if has_cover:
+                z.writestr("OEBPS/cover.xhtml", cover_xhtml, compress_type=zipfile.ZIP_DEFLATED)
+                z.writestr("OEBPS/cover.png", cover_image_bytes, compress_type=zipfile.ZIP_DEFLATED)
 
             # 動的チャプターおよび前書きを追加
             for path, content in chapter_files.items():

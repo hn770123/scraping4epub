@@ -150,12 +150,13 @@ class TestEpubBuilder(unittest.TestCase):
         self.assertTrue(result)
         self.assertTrue(os.path.exists(self.test_output))
 
-        # ビルドされたEPUBの content.opf を読み込み、デフォルト値（No Title / Unknown Author）が設定されているか検証
+        # ビルドされたEPUBの content.opf を読み込み、デフォルト値（No Title / Syosetu Downloader）が設定されているか検証
         with zipfile.ZipFile(self.test_output, 'r') as z:
             opf_data = z.read("OEBPS/content.opf").decode("utf-8")
             opf_soup = BeautifulSoup(opf_data, "xml")
             self.assertEqual(opf_soup.find("dc:title").string, "No Title")
-            self.assertEqual(opf_soup.find("dc:creator").string, "Unknown Author")
+            # 著者名のデフォルト値が「Syosetu Downloader」に変更されたことを検証します
+            self.assertEqual(opf_soup.find("dc:creator").string, "Syosetu Downloader")
 
 if __name__ == "__main__":
     unittest.main()

@@ -44,7 +44,9 @@ class EpubBuilder:
         """
         # メタデータの抽出と補完
         title = meta_info.get("title") or "No Title"
-        author = meta_info.get("author") or "Unknown Author"
+        # 1. 必須メタデータである「著者名（Author）」を明示的に追加する。
+        # デフォルトの著者名として「Syosetu Downloader」を必ず設定します。
+        author = meta_info.get("author") or "Syosetu Downloader"
         introduction = meta_info.get("introduction") or ""
 
         # EPUB識別用のUUIDおよび更新時刻の生成
@@ -177,6 +179,9 @@ ruby rt {
 """
 
         # OEBPS/content.opf (パッケージドキュメント) の生成
+        # 2. Kindleでエラー原因になりやすい「空のナビゲーション（Nav）」の出力を綺麗に整えるため、
+        # spineに 'nav' を入れず、最後に add_item(epub.EpubNav()) もしないという修正の方向性に則り、
+        # spine内の <itemref idref="nav"/> を削除します。
         content_opf = f"""<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="pub-id" version="3.0" xml:lang="ja">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -193,7 +198,6 @@ ruby rt {
     {manifest_str}
   </manifest>
   <spine toc="toc">
-    <itemref idref="nav"/>
     {spine_str}
   </spine>
 </package>"""

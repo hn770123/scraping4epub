@@ -1,0 +1,12 @@
+# .gitignore
+# Python bytecode and caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Output artifacts
+*.epub
+output.epub
+test_output.epub

@@ -1,0 +1,9 @@
+# requirements.txt
+# 小説家になろうの小説をスクレイピングし、EPUBを作成するための依存ライブラリ一覧
+#
+# AGENTS.mdの指示に基づき、日本語のコメントを入れています。
+
+requests==2.31.0
+beautifulsoup4==4.12.3
+lxml==5.1.0
+pytest==8.0.2

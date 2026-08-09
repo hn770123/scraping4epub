@@ -5,8 +5,11 @@ __pycache__/
 *.pyo
 *.pyd
 .pytest_cache/
+.venv
 
 # Output artifacts
 *.epub
 output.epub
 test_output.epub
+.DS_Store
+cover.png

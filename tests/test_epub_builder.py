@@ -112,5 +112,50 @@ class TestEpubBuilder(unittest.TestCase):
             self.assertIn("chapter_1.xhtml", links)
             self.assertIn("chapter_2.xhtml", links)
 
+    def test_content_converter_broken_html(self):
+        """
+        ContentConverterにおいて、壊れたHTMLや空のHTML、無効な入力データが渡された場合に、
+        クラッシュせず正しくパースされ、妥当なXHTMLとして自動修正されるかテストします。
+        """
+        converter = ContentConverter()
+
+        # 壊れたHTML（閉じタグの欠落など）
+        broken_html = "<div><p>テスト本文"
+        cleaned = converter.clean_html(broken_html)
+        xhtml = converter.convert_to_xhtml("壊れたテスト", cleaned)
+
+        # BeautifulSoupのxmlパーサーで、厳密なXML/XHTMLとして問題なくパースできるか検証
+        soup = BeautifulSoup(xhtml, "xml")
+        self.assertEqual(soup.title.string, "壊れたテスト")
+        # 閉じタグが自動で補完され、pタグが抽出できるか検証
+        self.assertIsNotNone(soup.find("p"))
+        self.assertEqual(soup.find("p").string, "テスト本文")
+
+        # 空のHTML
+        empty_html = ""
+        cleaned_empty = converter.clean_html(empty_html)
+        self.assertEqual(cleaned_empty, "")
+
+    def test_epub_builder_incomplete_metadata(self):
+        """
+        EpubBuilderにおいて、不完全なメタデータ（タイトルや著者が欠落しているなど）や、
+        空チャプターリストが渡された場合、自動的にデフォルト値で補完されビルドが成功するかテストします。
+        """
+        builder = EpubBuilder(self.test_output)
+
+        incomplete_meta = {}  # 完全に空のメタデータ
+        chapters = []        # 完全に空のチャプター
+
+        result = builder.build_epub(incomplete_meta, chapters)
+        self.assertTrue(result)
+        self.assertTrue(os.path.exists(self.test_output))
+
+        # ビルドされたEPUBの content.opf を読み込み、デフォルト値（No Title / Unknown Author）が設定されているか検証
+        with zipfile.ZipFile(self.test_output, 'r') as z:
+            opf_data = z.read("OEBPS/content.opf").decode("utf-8")
+            opf_soup = BeautifulSoup(opf_data, "xml")
+            self.assertEqual(opf_soup.find("dc:title").string, "No Title")
+            self.assertEqual(opf_soup.find("dc:creator").string, "Unknown Author")
+
 if __name__ == "__main__":
     unittest.main()
